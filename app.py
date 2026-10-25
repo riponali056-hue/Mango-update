@@ -96,7 +96,7 @@ def create_key():
     if days not in (1, 7, 30):
         return jsonify({"error": "Days must be 1, 7, or 30"}), 400
 
-    key = "MANGO-" + secrets.token_urlsafe(18)
+    key = "MANGO-" + secrets.token_urlsafe(7)
     created = utc_now()
     expires = created + timedelta(days=days)
 

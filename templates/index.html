@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,150 +7,235 @@
 <title>Mango-Update Admin</title>
 <style>
 *{box-sizing:border-box}
-body{margin:0;background:#10131b;color:#f1f5f9;font-family:Arial,sans-serif}
-main{max-width:850px;margin:30px auto;padding:16px}
-.card{background:#1c2230;border:1px solid #30394b;border-radius:14px;padding:18px;margin-bottom:16px}
-h1{color:#86efac;margin-top:0}
-h2{font-size:18px}
-input,select,button{width:100%;padding:12px;margin:7px 0;border-radius:8px;border:1px solid #465168;background:#101722;color:white}
-button{background:#16a34a;border:0;font-weight:bold;cursor:pointer}
+body{margin:0;background:#0b1020;color:#e8ecf5;font-family:Arial,sans-serif;padding:20px}
+main{max-width:950px;margin:auto}
+h1{color:#7dd3fc}
+.card{background:#151d31;border:1px solid #2b3852;border-radius:12px;padding:18px;margin:16px 0}
+input,select,button{padding:11px;border-radius:7px;border:1px solid #40506b;margin:4px;background:#0b1224;color:#fff}
+input{max-width:100%}
+button{cursor:pointer;background:#176bba;border:0}
+button.danger{background:#b42335}
 button.secondary{background:#475569}
-button.danger{background:#dc2626}
-.row{display:flex;gap:8px;align-items:center}
-.row button{width:auto;min-width:95px}
-.item{padding:12px 0;border-bottom:1px solid #374151;overflow-wrap:anywhere}
-small{color:#aab5c7}
-#message{overflow-wrap:anywhere}
+table{width:100%;border-collapse:collapse;margin-top:12px}
+th,td{padding:10px;border-bottom:1px solid #344158;text-align:left;overflow-wrap:anywhere}
+.status{font-weight:bold}
+#message{white-space:pre-wrap;color:#7dd3fc}
+.table-wrap{overflow-x:auto}
+.hidden{display:none}
+.small{color:#aab6ca;font-size:13px}
 </style>
 </head>
 <body>
 <main>
-<h1>🥭 Mango-Update</h1>
-<p>Web Key Administration Panel</p>
+<h1>🥭 Mango-Update Admin</h1>
+<p class="small">License Key Management Panel</p>
+<p id="message"></p>
 
-<section class="card" id="login">
-<h2>Admin Login</h2>
-<input id="password" type="password" placeholder="Admin password" autocomplete="current-password">
-<button onclick="loginAdmin()">Login</button>
-<p id="loginMsg"></p>
+<section class="card" id="loginBox">
+<h3>Admin Login</h3>
+<input id="password" type="password" placeholder="Admin password">
+<button onclick="login()">Login</button>
 </section>
 
-<div id="dashboard" hidden>
+<div id="panel" class="hidden">
 <section class="card">
-<h2>Create License Key</h2>
-<label>Key duration</label>
+<h3>Create New Key</h3>
+<label>Duration:</label>
 <select id="days">
 <option value="1">1 Day</option>
 <option value="7">7 Days</option>
 <option value="30">30 Days</option>
 </select>
-<button onclick="createKey()">Generate Key</button>
-<p id="created"></p>
+<button onclick="createKey()">Create Key</button>
+<div id="newKey"></div>
 </section>
 
 <section class="card">
-<div class="row">
-<h2 style="flex:1">License Keys</h2>
-<button onclick="loadKeys()">Refresh</button>
+<h3>Key List</h3>
+<button onclick="loadKeys()">🔄 Refresh List</button>
+<button class="secondary" onclick="cleanup()">🧹 Delete Expired Keys</button>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Status</th>
+<th>Duration</th>
+<th>Expires</th>
+<th>Device Lock</th>
+<th>Actions</th>
+</tr>
+</thead>
+<tbody id="keyRows">
+<tr><td colspan="6">Loading...</td></tr>
+</tbody>
+</table>
 </div>
-<div id="keys">Login to view keys.</div>
 </section>
-<button class="secondary" onclick="logoutAdmin()">Logout</button>
+<button class="secondary" onclick="logout()">Logout</button>
 </div>
-<p id="message"></p>
 </main>
 
 <script>
 let adminPassword = "";
 
-async function api(path, options={}) {
-  options.headers = {
-    "Content-Type":"application/json",
-    "X-Admin-Password":adminPassword,
-    ...(options.headers||{})
+function message(text) {
+  document.getElementById("message").textContent = text;
+}
+
+async function api(path, method = "GET", body = null) {
+  const options = {
+    method,
+    headers: {"X-Admin-Password": adminPassword}
   };
+
+  if (body !== null) {
+    options.headers["Content-Type"] = "application/json";
+    options.body = JSON.stringify(body);
+  }
+
   const response = await fetch(path, options);
-  const data = await response.json().catch(()=>({error:"Invalid server response"}));
-  if(!response.ok) throw new Error(data.error || "Request failed");
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "Request failed");
+  }
   return data;
 }
 
-async function loginAdmin(){
-  adminPassword=document.getElementById("password").value;
-  const msg=document.getElementById("loginMsg");
-  msg.textContent="Checking...";
-  try{
-    await api("/admin/keys");
-    document.getElementById("login").hidden=true;
-    document.getElementById("dashboard").hidden=false;
-    msg.textContent="";
+async function login() {
+  adminPassword = document.getElementById("password").value;
+
+  if (!adminPassword) {
+    message("Admin password dao.");
+    return;
+  }
+
+  try {
     await loadKeys();
-  }catch(e){
-    adminPassword="";
-    msg.textContent="Login failed: "+e.message;
+    document.getElementById("loginBox").classList.add("hidden");
+    document.getElementById("panel").classList.remove("hidden");
+    document.getElementById("password").value = "";
+    message("Login successful.");
+  } catch (error) {
+    adminPassword = "";
+    message("Login failed: " + error.message);
   }
 }
 
-async function createKey(){
-  const output=document.getElementById("created");
-  output.textContent="Creating...";
-  try{
-    const data=await api("/admin/keys",{
-      method:"POST",
-      body:JSON.stringify({days:Number(document.getElementById("days").value)})
+function logout() {
+  adminPassword = "";
+  document.getElementById("panel").classList.add("hidden");
+  document.getElementById("loginBox").classList.remove("hidden");
+  document.getElementById("keyRows").innerHTML = "";
+  message("Logged out.");
+}
+
+async function createKey() {
+  try {
+    const data = await api("/admin/keys", "POST", {
+      days: Number(document.getElementById("days").value)
     });
-    output.textContent="New key: "+data.key+" | Expires: "+data.expires_at;
+
+    document.getElementById("newKey").textContent =
+      "New key: " + data.key + " | Expires: " + data.expires_at;
+
+    message("Key created successfully.");
     await loadKeys();
-  }catch(e){output.textContent="Error: "+e.message}
+  } catch (error) {
+    message("Create failed: " + error.message);
+  }
 }
 
-async function loadKeys(){
-  const box=document.getElementById("keys");
-  box.textContent="Loading...";
-  try{
-    const keys=await api("/admin/keys");
-    box.replaceChildren();
-    if(!keys.length){box.textContent="No keys yet.";return}
-    keys.forEach(item=>{
-      const div=document.createElement("div");
-      div.className="item";
-      const title=document.createElement("strong");
-      title.textContent=item.key;
-      const info=document.createElement("p");
-      info.textContent="Status: "+item.status+" | Duration: "+item.days+
-        " day(s) | Device locked: "+(item.device_locked?"Yes":"No")+
-        " | Expires: "+item.expires_at;
-      div.append(title,info);
-      if(item.status==="active"){
-        const btn=document.createElement("button");
-        btn.className="danger";
-        btn.textContent="Revoke Key";
-        btn.onclick=async()=>{
-          if(!confirm("Revoke this key?"))return;
-          try{
-            await api("/admin/revoke",{
-              method:"POST",body:JSON.stringify({key:item.key})
-            });
-            await loadKeys();
-          }catch(e){alert(e.message)}
-        };
-        div.appendChild(btn);
+async function loadKeys() {
+  try {
+    const data = await api("/admin/keys");
+    if (!Array.isArray(data)) {
+      throw new Error("Key list API format incorrect. Check app.py.");
+    }
+
+    const rows = document.getElementById("keyRows");
+    rows.replaceChildren();
+
+    if (data.length === 0) {
+      rows.innerHTML = '<tr><td colspan="6">No keys found.</td></tr>';
+      return;
+    }
+
+    for (const item of data) {
+      const tr = document.createElement("tr");
+
+      function cell(value) {
+        const td = document.createElement("td");
+        td.textContent = value ?? "-";
+        tr.appendChild(td);
       }
-      box.appendChild(div);
-    });
-  }catch(e){box.textContent="Error: "+e.message}
+
+      cell(item.key);
+      cell(item.status);
+      cell(item.days ? item.days + " day(s)" : "-");
+      cell(item.expires_at || "-");
+      cell(item.device_locked ? "Locked" : "No");
+
+      const actions = document.createElement("td");
+
+      const revokeBtn = document.createElement("button");
+      revokeBtn.className = "secondary";
+      revokeBtn.textContent = "Revoke";
+      revokeBtn.onclick = () => revokeKey(item.key);
+
+      const deleteBtn = document.createElement("button");
+      deleteBtn.className = "danger";
+      deleteBtn.textContent = "Delete";
+      deleteBtn.onclick = () => deleteKey(item.key);
+
+      actions.append(revokeBtn, deleteBtn);
+      tr.appendChild(actions);
+      rows.appendChild(tr);
+    }
+
+    message("Key list updated. Total keys: " + data.length);
+  } catch (error) {
+    message("List error: " + error.message);
+    throw error;
+  }
 }
 
-function logoutAdmin(){
-  adminPassword="";
-  document.getElementById("dashboard").hidden=true;
-  document.getElementById("login").hidden=false;
-  document.getElementById("password").value="";
+async function revokeKey(key) {
+  if (!confirm("Revoke this key?\n" + key)) return;
+
+  try {
+    await api("/admin/revoke", "POST", {key});
+    message("Key revoked.");
+    await loadKeys();
+  } catch (error) {
+    message("Revoke failed: " + error.message);
+  }
 }
 
-document.getElementById("password").addEventListener("keydown",e=>{
-  if(e.key==="Enter")loginAdmin();
-});
+async function deleteKey(key) {
+  if (!confirm("Permanently delete this key?\n" + key)) return;
+
+  try {
+    await api("/admin/delete", "POST", {key});
+    message("Key permanently deleted.");
+    await loadKeys();
+  } catch (error) {
+    message("Delete failed: " + error.message);
+  }
+}
+
+async function cleanup() {
+  if (!confirm("Permanently delete all expired keys?")) return;
+
+  try {
+    const data = await api("/admin/cleanup", "POST", {});
+    message("Expired keys deleted: " + data.deleted_count);
+    await loadKeys();
+  } catch (error) {
+    message("Cleanup failed: " + error.message);
+  }
+}
 </script>
 </body>
-                                            </html>
+</html>

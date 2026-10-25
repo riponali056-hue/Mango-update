@@ -3,7 +3,7 @@ import hmac
 import secrets
 from datetime import datetime, timedelta, timezone
 from functools import wraps
-
+from flask import render_template
 import firebase_admin
 from firebase_admin import credentials, db
 from flask import Flask, jsonify, request
@@ -40,10 +40,7 @@ def admin_required(fn):
 
 @app.get("/")
 def home():
-    return jsonify({
-        "name": "Mango-Update",
-        "status": "online"
-    })
+    return render_template("index.html")
 
 
 @app.post("/admin/keys")

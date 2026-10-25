@@ -1,0 +1,15 @@
+
+services:
+  - type: web
+    name: mango-update
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    plan: free
+    envVars:
+      - key: FIREBASE_DATABASE_URL
+        value: https://mango-update-a2ee5-default-rtdb.firebaseio.com/
+      - key: FIREBASE_SERVICE_ACCOUNT_JSON
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false

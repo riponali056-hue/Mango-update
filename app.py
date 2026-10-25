@@ -119,7 +119,6 @@ def create_key():
 @app.get("/admin/keys")
 @admin_required
 def list_keys():
-    deleted_count = cleanup_expired_keys()
     records = db.reference("keys").get() or {}
     result = []
 
@@ -141,11 +140,7 @@ def list_keys():
             "device_locked": bool(record.get("device_id")),
         })
 
-    return jsonify({
-        "keys": result,
-        "expired_deleted": deleted_count,
-    })
-
+    return jsonify(result)
 
 @app.post("/admin/revoke")
 @admin_required

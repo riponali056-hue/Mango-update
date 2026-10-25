@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mango-Update Admin</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#10131b;color:#f1f5f9;font-family:Arial,sans-serif}
+main{max-width:850px;margin:30px auto;padding:16px}
+.card{background:#1c2230;border:1px solid #30394b;border-radius:14px;padding:18px;margin-bottom:16px}
+h1{color:#86efac;margin-top:0}
+h2{font-size:18px}
+input,select,button{width:100%;padding:12px;margin:7px 0;border-radius:8px;border:1px solid #465168;background:#101722;color:white}
+button{background:#16a34a;border:0;font-weight:bold;cursor:pointer}
+button.secondary{background:#475569}
+button.danger{background:#dc2626}
+.row{display:flex;gap:8px;align-items:center}
+.row button{width:auto;min-width:95px}
+.item{padding:12px 0;border-bottom:1px solid #374151;overflow-wrap:anywhere}
+small{color:#aab5c7}
+#message{overflow-wrap:anywhere}
+</style>
+</head>
+<body>
+<main>
+<h1>🥭 Mango-Update</h1>
+<p>Web Key Administration Panel</p>
+
+<section class="card" id="login">
+<h2>Admin Login</h2>
+<input id="password" type="password" placeholder="Admin password" autocomplete="current-password">
+<button onclick="loginAdmin()">Login</button>
+<p id="loginMsg"></p>
+</section>
+
+<div id="dashboard" hidden>
+<section class="card">
+<h2>Create License Key</h2>
+<label>Key duration</label>
+<select id="days">
+<option value="1">1 Day</option>
+<option value="7">7 Days</option>
+<option value="30">30 Days</option>
+</select>
+<button onclick="createKey()">Generate Key</button>
+<p id="created"></p>
+</section>
+
+<section class="card">
+<div class="row">
+<h2 style="flex:1">License Keys</h2>
+<button onclick="loadKeys()">Refresh</button>
+</div>
+<div id="keys">Login to view keys.</div>
+</section>
+<button class="secondary" onclick="logoutAdmin()">Logout</button>
+</div>
+<p id="message"></p>
+</main>
+
+<script>
+let adminPassword = "";
+
+async function api(path, options={}) {
+  options.headers = {
+    "Content-Type":"application/json",
+    "X-Admin-Password":adminPassword,
+    ...(options.headers||{})
+  };
+  const response = await fetch(path, options);
+  const data = await response.json().catch(()=>({error:"Invalid server response"}));
+  if(!response.ok) throw new Error(data.error || "Request failed");
+  return data;
+}
+
+async function loginAdmin(){
+  adminPassword=document.getElementById("password").value;
+  const msg=document.getElementById("loginMsg");
+  msg.textContent="Checking...";
+  try{
+    await api("/admin/keys");
+    document.getElementById("login").hidden=true;
+    document.getElementById("dashboard").hidden=false;
+    msg.textContent="";
+    await loadKeys();
+  }catch(e){
+    adminPassword="";
+    msg.textContent="Login failed: "+e.message;
+  }
+}
+
+async function createKey(){
+  const output=document.getElementById("created");
+  output.textContent="Creating...";
+  try{
+    const data=await api("/admin/keys",{
+      method:"POST",
+      body:JSON.stringify({days:Number(document.getElementById("days").value)})
+    });
+    output.textContent="New key: "+data.key+" | Expires: "+data.expires_at;
+    await loadKeys();
+  }catch(e){output.textContent="Error: "+e.message}
+}
+
+async function loadKeys(){
+  const box=document.getElementById("keys");
+  box.textContent="Loading...";
+  try{
+    const keys=await api("/admin/keys");
+    box.replaceChildren();
+    if(!keys.length){box.textContent="No keys yet.";return}
+    keys.forEach(item=>{
+      const div=document.createElement("div");
+      div.className="item";
+      const title=document.createElement("strong");
+      title.textContent=item.key;
+      const info=document.createElement("p");
+      info.textContent="Status: "+item.status+" | Duration: "+item.days+
+        " day(s) | Device locked: "+(item.device_locked?"Yes":"No")+
+        " | Expires: "+item.expires_at;
+      div.append(title,info);
+      if(item.status==="active"){
+        const btn=document.createElement("button");
+        btn.className="danger";
+        btn.textContent="Revoke Key";
+        btn.onclick=async()=>{
+          if(!confirm("Revoke this key?"))return;
+          try{
+            await api("/admin/revoke",{
+              method:"POST",body:JSON.stringify({key:item.key})
+            });
+            await loadKeys();
+          }catch(e){alert(e.message)}
+        };
+        div.appendChild(btn);
+      }
+      box.appendChild(div);
+    });
+  }catch(e){box.textContent="Error: "+e.message}
+}
+
+function logoutAdmin(){
+  adminPassword="";
+  document.getElementById("dashboard").hidden=true;
+  document.getElementById("login").hidden=false;
+  document.getElementById("password").value="";
+}
+
+document.getElementById("password").addEventListener("keydown",e=>{
+  if(e.key==="Enter")loginAdmin();
+});
+</script>
+</body>
+                                            </html>
